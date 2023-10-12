@@ -83,13 +83,11 @@ func TestHub(t *testing.T) {
 	wg := &sync.WaitGroup{}
 
 	go func() {
-		go func() {
-			for err := range errs {
-				t.Log(err)
-				assert.NotNil(t, err)
-				return
-			}
-		}()
+		for err := range errs {
+			t.Log(err)
+			assert.NotNil(t, err)
+			return
+		}
 	}()
 
 	hub.Route(MessageTypeTestResponse, func(ctx context.Context, message gowebsockethub.Message, writing chan<- gowebsockethub.Message) error {
@@ -118,8 +116,8 @@ func TestHub(t *testing.T) {
 
 	<-done
 
-	cancel()
 	conn.Close()
+	cancel()
 	wg.Wait()
 
 	err = server.Shutdown(ctx)
