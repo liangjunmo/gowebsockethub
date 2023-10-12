@@ -6,10 +6,12 @@ import (
 
 type Route string
 
-type Message struct {
-	ID      string `json:"id"`
-	Route   Route  `json:"route"`
-	Payload string `json:"payload"`
+type Message interface {
+	GetID() string
+	GetRoute() Route
+	GetPayload() string
 }
+
+type Parser func(raw []byte) (Message, error)
 
 type Handler func(ctx context.Context, message Message, writing chan<- Message) error

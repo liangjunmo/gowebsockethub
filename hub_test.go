@@ -15,6 +15,35 @@ import (
 	"github.com/liangjunmo/gowebsockethub"
 )
 
+type Message struct {
+	ID          string               `json:"id"`
+	MessageType gowebsockethub.Route `json:"type"`
+	Payload     string               `json:"payload"`
+}
+
+func (m Message) GetID() string {
+	return m.ID
+}
+
+func (m Message) GetRoute() gowebsockethub.Route {
+	return m.MessageType
+}
+
+func (m Message) GetPayload() string {
+	return m.Payload
+}
+
+var Parser gowebsockethub.Parser = func(raw []byte) (gowebsockethub.Message, error) {
+	var message Message
+
+	err := json.Unmarshal(raw, &message)
+	if err != nil {
+		return Message{}, err
+	}
+
+	return message, nil
+}
+
 const (
 	addr  = "localhost:8080"
 	route = "/ws"
@@ -33,7 +62,7 @@ func TestHub(t *testing.T) {
 		conn, err := wsUpgrader.Upgrade(w, r, nil)
 		assert.Nil(t, err)
 
-		hub, _, errs := gowebsockethub.New(conn, true, 10, 10)
+		hub, _, errs := gowebsockethub.New(conn, true, 10, 10, Parser)
 
 		go func() {
 			for err := range errs {
@@ -46,10 +75,10 @@ func TestHub(t *testing.T) {
 		hub.Handle(RouteTestRequest, func(ctx context.Context, message gowebsockethub.Message, writing chan<- gowebsockethub.Message) error {
 			t.Logf("%+v", message)
 
-			writing <- gowebsockethub.Message{
-				ID:      time.Now().String(),
-				Route:   RouteTestResponse,
-				Payload: message.Payload + "...",
+			writing <- Message{
+				ID:          time.Now().String(),
+				MessageType: RouteTestResponse,
+				Payload:     message.GetPayload() + "...",
 			}
 
 			return nil
@@ -76,7 +105,7 @@ func TestHub(t *testing.T) {
 	assert.Nil(t, err)
 	defer conn.Close()
 
-	hub, _, errs := gowebsockethub.New(conn, false, 10, 10)
+	hub, _, errs := gowebsockethub.New(conn, false, 10, 10, Parser)
 
 	done := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -103,10 +132,10 @@ func TestHub(t *testing.T) {
 		hub.Run(ctx, wg)
 	}()
 
-	message := gowebsockethub.Message{
-		ID:      time.Now().String(),
-		Route:   RouteTestRequest,
-		Payload: "hello world",
+	message := Message{
+		ID:          time.Now().String(),
+		MessageType: RouteTestRequest,
+		Payload:     "hello world",
 	}
 
 	b, _ := json.Marshal(message)

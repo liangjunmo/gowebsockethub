@@ -19,6 +19,7 @@ type Hub struct {
 	reading  chan Message
 	writing  chan Message
 	handlers map[Route]Handler
+	parser   Parser
 
 	// https://github.com/gorilla/websocket/blob/666c197fc9157896b57515c3a3326c3f8c8319fe/examples/chat/client.go
 	pingPeriod     time.Duration
@@ -27,7 +28,7 @@ type Hub struct {
 	maxMessageSize int64
 }
 
-func New(conn *websocket.Conn, isServer bool, readingCapacity uint32, writingCapacity uint32) (hub *Hub, writing chan Message, err chan error) {
+func New(conn *websocket.Conn, isServer bool, readingCapacity uint32, writingCapacity uint32, parser Parser) (hub *Hub, writing chan Message, err chan error) {
 	hub = &Hub{
 		conn:     conn,
 		isServer: isServer,
@@ -37,6 +38,7 @@ func New(conn *websocket.Conn, isServer bool, readingCapacity uint32, writingCap
 		reading:  make(chan Message, readingCapacity),
 		writing:  make(chan Message, writingCapacity),
 		handlers: make(map[Route]Handler),
+		parser:   parser,
 
 		pingPeriod:     time.Second * 60 * 9 / 10,
 		readWait:       time.Second * 60,
@@ -149,9 +151,9 @@ func (hub *Hub) read(ctx context.Context, wg *sync.WaitGroup) {
 				return
 			}
 
-			e = json.Unmarshal(b, &message)
+			message, err = hub.parser(b)
 			if e != nil {
-				hub.err <- fmt.Errorf("[%s] unmarshal message: %w", tag, e)
+				hub.err <- fmt.Errorf("[%s] parser message %s: %w", tag, b, e)
 				continue
 			}
 
@@ -252,15 +254,15 @@ func (hub *Hub) handle(ctx context.Context, wg *sync.WaitGroup) {
 				return
 			}
 
-			handler, ok := hub.handlers[message.Route]
+			handler, ok := hub.handlers[message.GetRoute()]
 			if !ok {
-				hub.err <- fmt.Errorf("[%s] %s handler not found", tag, message.Route)
+				hub.err <- fmt.Errorf("[%s] %s handler not found", tag, message.GetRoute())
 				continue
 			}
 
 			e := handler(ctx, message, hub.writing)
 			if e != nil {
-				hub.err <- fmt.Errorf("[%s] run %s handler: %w", tag, message.Route, e)
+				hub.err <- fmt.Errorf("[%s] run %s handler: %w", tag, message.GetRoute(), e)
 				continue
 			}
 		}
