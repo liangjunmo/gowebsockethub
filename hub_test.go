@@ -72,7 +72,7 @@ func TestHub(t *testing.T) {
 			}
 		}()
 
-		hub.Handle(RouteTestRequest, func(ctx context.Context, message gowebsockethub.Message, writing chan<- gowebsockethub.Message) error {
+		hub.Intercept(RouteTestRequest, func(ctx context.Context, message gowebsockethub.Message, writing chan<- gowebsockethub.Message) error {
 			t.Logf("%+v", message)
 
 			writing <- Message{
@@ -107,10 +107,6 @@ func TestHub(t *testing.T) {
 
 	hub, _, errs := gowebsockethub.New(conn, false, 10, 10, Parser)
 
-	done := make(chan struct{})
-	ctx, cancel := context.WithCancel(context.Background())
-	wg := &sync.WaitGroup{}
-
 	go func() {
 		for err := range errs {
 			t.Log(err)
@@ -118,6 +114,10 @@ func TestHub(t *testing.T) {
 			return
 		}
 	}()
+
+	done := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
 
 	hub.Handle(RouteTestResponse, func(ctx context.Context, message gowebsockethub.Message, writing chan<- gowebsockethub.Message) error {
 		t.Logf("%+v", message)

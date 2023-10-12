@@ -18,8 +18,10 @@ type Hub struct {
 	canceled chan struct{}
 	reading  chan Message
 	writing  chan Message
-	handlers map[Route]Handler
-	parser   Parser
+
+	parser       Parser
+	handlers     map[Route]Handler
+	interceptors map[Route]Handler
 
 	// https://github.com/gorilla/websocket/blob/666c197fc9157896b57515c3a3326c3f8c8319fe/examples/chat/client.go
 	pingPeriod     time.Duration
@@ -37,8 +39,10 @@ func New(conn *websocket.Conn, isServer bool, readingCapacity uint32, writingCap
 		canceled: make(chan struct{}, 3),
 		reading:  make(chan Message, readingCapacity),
 		writing:  make(chan Message, writingCapacity),
-		handlers: make(map[Route]Handler),
-		parser:   parser,
+
+		parser:       parser,
+		handlers:     make(map[Route]Handler),
+		interceptors: make(map[Route]Handler),
 
 		pingPeriod:     time.Second * 60 * 9 / 10,
 		readWait:       time.Second * 60,
@@ -71,6 +75,14 @@ func (hub *Hub) Handle(route Route, handler Handler) {
 	}
 
 	hub.handlers[route] = handler
+}
+
+func (hub *Hub) Intercept(route Route, interceptor Handler) {
+	if _, ok := hub.interceptors[route]; ok {
+		panic(fmt.Sprintf("interceptor already exists: %s", route))
+	}
+
+	hub.interceptors[route] = interceptor
 }
 
 func (hub *Hub) Run(ctx context.Context, wg *sync.WaitGroup) {
@@ -154,6 +166,16 @@ func (hub *Hub) read(ctx context.Context, wg *sync.WaitGroup) {
 			message, err = hub.parser(b)
 			if e != nil {
 				hub.err <- fmt.Errorf("[%s] parser message %s: %w", tag, b, e)
+				continue
+			}
+
+			if interceptor, ok := hub.interceptors[message.GetRoute()]; ok {
+				e = interceptor(ctx, message, hub.writing)
+				if e != nil {
+					hub.err <- fmt.Errorf("[%s] run %s interceptor: %w", tag, message.GetRoute(), e)
+					continue
+				}
+
 				continue
 			}
 
