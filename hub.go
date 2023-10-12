@@ -18,7 +18,7 @@ type Hub struct {
 	canceled chan struct{}
 	reading  chan Message
 	writing  chan Message
-	handlers map[MessageType]Handler
+	handlers map[Route]Handler
 
 	// https://github.com/gorilla/websocket/blob/666c197fc9157896b57515c3a3326c3f8c8319fe/examples/chat/client.go
 	pingPeriod     time.Duration
@@ -36,7 +36,7 @@ func New(conn *websocket.Conn, isServer bool, readingCapacity uint32, writingCap
 		canceled: make(chan struct{}, 3),
 		reading:  make(chan Message, readingCapacity),
 		writing:  make(chan Message, writingCapacity),
-		handlers: make(map[MessageType]Handler),
+		handlers: make(map[Route]Handler),
 
 		pingPeriod:     time.Second * 60 * 9 / 10,
 		readWait:       time.Second * 60,
@@ -63,12 +63,12 @@ func (hub *Hub) SetMaxMessageSize(size int64) {
 	hub.maxMessageSize = size
 }
 
-func (hub *Hub) Route(mt MessageType, handler Handler) {
-	if _, ok := hub.handlers[mt]; ok {
-		panic(fmt.Sprintf("handler already exists: %s", mt))
+func (hub *Hub) Handle(route Route, handler Handler) {
+	if _, ok := hub.handlers[route]; ok {
+		panic(fmt.Sprintf("handler already exists: %s", route))
 	}
 
-	hub.handlers[mt] = handler
+	hub.handlers[route] = handler
 }
 
 func (hub *Hub) Run(ctx context.Context, wg *sync.WaitGroup) {
@@ -252,15 +252,15 @@ func (hub *Hub) handle(ctx context.Context, wg *sync.WaitGroup) {
 				return
 			}
 
-			handler, ok := hub.handlers[message.Type]
+			handler, ok := hub.handlers[message.Route]
 			if !ok {
-				hub.err <- fmt.Errorf("[%s] %s handler not found", tag, message.Type)
+				hub.err <- fmt.Errorf("[%s] %s handler not found", tag, message.Route)
 				continue
 			}
 
 			e := handler(ctx, message, hub.writing)
 			if e != nil {
-				hub.err <- fmt.Errorf("[%s] run %s handler: %w", tag, message.Type, e)
+				hub.err <- fmt.Errorf("[%s] run %s handler: %w", tag, message.Route, e)
 				continue
 			}
 		}

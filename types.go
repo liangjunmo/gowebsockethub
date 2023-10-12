@@ -4,12 +4,12 @@ import (
 	"context"
 )
 
-type MessageType string
+type Route string
 
 type Message struct {
-	ID      string      `json:"id"`
-	Type    MessageType `json:"type"`
-	Payload string      `json:"payload"`
+	ID      string `json:"id"`
+	Route   Route  `json:"route"`
+	Payload string `json:"payload"`
 }
 
 type Handler func(ctx context.Context, message Message, writing chan<- Message) error

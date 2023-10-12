@@ -19,8 +19,8 @@ const (
 	addr  = "localhost:8080"
 	route = "/ws"
 
-	MessageTypeTestRequest  gowebsockethub.MessageType = "MessageTypeTestRequest"
-	MessageTypeTestResponse gowebsockethub.MessageType = "MessageTypeTestResponse"
+	RouteTestRequest  gowebsockethub.Route = "TestRequest"
+	RouteTestResponse gowebsockethub.Route = "TestResponse"
 )
 
 var wsUpgrader = websocket.Upgrader{
@@ -43,12 +43,12 @@ func TestHub(t *testing.T) {
 			}
 		}()
 
-		hub.Route(MessageTypeTestRequest, func(ctx context.Context, message gowebsockethub.Message, writing chan<- gowebsockethub.Message) error {
+		hub.Handle(RouteTestRequest, func(ctx context.Context, message gowebsockethub.Message, writing chan<- gowebsockethub.Message) error {
 			t.Logf("%+v", message)
 
 			writing <- gowebsockethub.Message{
 				ID:      time.Now().String(),
-				Type:    MessageTypeTestResponse,
+				Route:   RouteTestResponse,
 				Payload: message.Payload + "...",
 			}
 
@@ -90,7 +90,7 @@ func TestHub(t *testing.T) {
 		}
 	}()
 
-	hub.Route(MessageTypeTestResponse, func(ctx context.Context, message gowebsockethub.Message, writing chan<- gowebsockethub.Message) error {
+	hub.Handle(RouteTestResponse, func(ctx context.Context, message gowebsockethub.Message, writing chan<- gowebsockethub.Message) error {
 		t.Logf("%+v", message)
 
 		done <- struct{}{}
@@ -105,7 +105,7 @@ func TestHub(t *testing.T) {
 
 	message := gowebsockethub.Message{
 		ID:      time.Now().String(),
-		Type:    MessageTypeTestRequest,
+		Route:   RouteTestRequest,
 		Payload: "hello world",
 	}
 
